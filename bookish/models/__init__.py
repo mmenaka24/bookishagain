@@ -1,5 +1,5 @@
-from .book import Book
-from .user import User
-from .user_book import user_book
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 
-__all__ = ['Book', 'User', 'user_book']
+db = SQLAlchemy()
+migrate = Migrate(db)
