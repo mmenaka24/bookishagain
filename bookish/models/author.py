@@ -4,7 +4,7 @@ from bookish.app import db
 class Author(db.Model):
     __tablename__ = "Authors"
 
-    id = db.Column(db.Integer, primary_key=True)
+    author_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(), nullable=False)
 
     # many-to-many relationship with books through the book_author junction table
@@ -14,11 +14,11 @@ class Author(db.Model):
         self.name = name
 
     def __repr__(self):
-        return "<Author: id={self.id}, name={self.name}>"
+        return f"<Author: id={self.id}, name={self.name}>"
 
     def serialize(self):
         return {
-            "id": self.id,
+            "id": self.author_id,
             "name": self.name,
             "books": [book.isbn for book in self.books],
         }
