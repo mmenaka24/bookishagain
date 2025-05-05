@@ -9,10 +9,11 @@ class Copy(db.Model):
     isbn = db.Column(
         db.String(13), db.ForeignKey("Books.isbn"), nullable=False
     )  # This line creates the foreign key constraint, but doesn't automatically give access to the Book object
+    user_id = db.Column(db.Integer, db.ForeignKey('Users.id'), nullable=True)
     is_checked_out = db.Column(db.Boolean, nullable=False)
 
     book = db.relationship(
-        "Book", backref="copies"
+        "Book", backref="Copies"
     )  # Tells SQLAlchemy to give access to the Book object associated with each Copy and let each Book access its Copies
 
     def __init__(self, isbn):
