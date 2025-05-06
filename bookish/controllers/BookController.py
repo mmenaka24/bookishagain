@@ -70,11 +70,10 @@ def add_book_or_get_all_books():
         books = Book.query.all()
         results = [
             {
-                "id": book.id,
-                "title": book.Title,
-                "author": book.Author,
-                "isbn": book.ISBN,
-                "quantity": book.Quantity,
+                "isbn": book.isbn,
+                "title": book.title,
+                "authors": [author.name for author in book.authors],
+                "number of copies": len(book.copies),
             }
             for book in books
         ]
