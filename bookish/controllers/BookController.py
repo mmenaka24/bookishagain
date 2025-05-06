@@ -1,11 +1,9 @@
 from flask import request
-from bookish.models.book import Book
-from bookish.models.author import Author
-from bookish.models.copy import Copy
-from bookish.models.user import User
+from bookish.models import Author, Book, Copy, User
 from bookish.app import db
 from flask import Blueprint
 
+# Create a utils.py file for reusable validation functions
 
 book_controller = Blueprint("book_controller", __name__)
 
@@ -17,338 +15,307 @@ def health_check():
 
 @book_controller.route("/newbook", methods=["POST"])
 def add_book():
-    if request.method == "POST":
 
-        # Ask for information about book, then add to books, copies and authors tables
+    # Ask for information about book, then add to books, copies and authors tables
 
-        if request.is_json:
-            data = request.get_json()
+    if request.is_json:
+        data = request.get_json()
 
-            # JSON should contain the following information:
-            isbn = data.get("isbn")
-            title = data.get("title")
-            author_names = data.get("authors")
-            quantity = data.get("quantity")
+        # JSON should contain the following information:
+        isbn = data.get("isbn")
+        title = data.get("title")
+        author_names = data.get("authors")
+        quantity = data.get("quantity")
 
-            # Check that the json has all the required fields
-            if not all([isbn, title, author_names, quantity]):
-                return {"error": "Missing required fields"}
+        # Check that the json has all the required fields
+        if not all([isbn, title, author_names, quantity]):
+            return {"error": "Missing required fields"}
 
-            # Check that authors are given as a list (even if there is just one) and types of other fields as well
-            if not (type(isbn) is str and len(isbn) == 13):
-                return {"error": "The isbn must be a string of length 13"}
-            if not type(title) is str:
-                return {"error": "The book title must be a string"}
-            if not type(author_names) is list:
+        # Check types of variables are correct
+        if not (type(isbn) is str and len(isbn) == 13):
+            return {"error": "The isbn must be a string of length 13"}
+        if not type(title) is str:
+            return {"error": "The book title must be a string"}
+        if not type(author_names) is list:
+            return {"error": "The author names must be given as a list of strings"}
+        for name in author_names:
+            if not type(name) is str:
                 return {"error": "The author names must be given as a list of strings"}
-            for name in author_names:
-                if not type(name) is str:
-                    return {
-                        "error": "The author names must be given as a list of strings"
-                    }
-            if not type(quantity) is int:
-                return {
-                    "error": "The quantity must be given as an integer (not a string!)"
-                }
+        if not type(quantity) is int:
+            return {"error": "The quantity must be given as an integer (not a string!)"}
 
-            # Check if book with ISBN already exists in database
-            if Book.query.get(isbn):  # Use .get() to search by primary key
-                return {"error": "Book with this ISBN already exists"}
+        # Check if book with ISBN already exists in database
+        if Book.query.get(isbn):  # Use .get() to search by primary key
+            return {"error": "Book with this ISBN already exists"}
 
-            # Check if each author is already in database, if not then add them
-            # Create a list of Author objects for this book (rather than just a list of their names as strings)
-            author_objs = []
-            for name in author_names:
-                author = Author.query.filter_by(
-                    name=name
-                ).first()  # Use .filter_by to search by something that isn't a primary key
-                if not author:
-                    author = Author(name=name)
-                    db.session.add(author)
-                author_objs.append(author)
+        # Check if each author is already in database, if not then add them
+        # Create a list of Author objects for this book (rather than just a list of their names as strings)
+        author_objs = []
+        for name in author_names:
+            author = Author.query.filter_by(
+                name=name
+            ).first()  # Use .filter_by to search by something that isn't a primary key
+            if not author:
+                author = Author(name=name)
+                db.session.add(author)
+            author_objs.append(author)
 
-            # Create the Book object and add it to the database
-            new_book = Book(isbn=isbn, title=title, authors=author_objs)
-            db.session.add(new_book)
-            db.session.flush()  # This sends pending changes to the database without committing them
-            # ie, don't want to add book yet because we need access to the copy ids
+        # Create the Book object and add it to the database
+        new_book = Book(isbn=isbn, title=title, authors=author_objs)
+        db.session.add(new_book)
+        db.session.flush()  # This sends pending changes to the database without committing them
+        # ie, don't want to add book yet because we need access to the copy ids
 
-            # Add copies
-            for _ in range(quantity):
-                copy = Copy(isbn=isbn)
-                db.session.add(copy)
+        # Add copies
+        for _ in range(quantity):
+            copy = Copy(isbn=isbn)
+            db.session.add(copy)
 
-            db.session.commit()
-            return {"message": "New book has been created successfully."}
-        else:
-            return {"error": "The request payload is not in JSON format"}
+        db.session.commit()
+        return {"message": "New book has been created successfully."}
     else:
-        return {"error": "request method not supported"}
+        return {"error": "The request payload is not in JSON format"}
 
 
 @book_controller.route("/book", methods=["GET"])
 def get_books():
-    if request.method == "GET":
-        # Want to give information about a specific book if the isbn is given, otherwise show all books
-        isbn = request.args.get("isbn")
 
-        if isbn:
-            book = Book.query.get(isbn)
+    # Want to give information about a specific book if the isbn is given, otherwise show all books
+    isbn = request.args.get("isbn")
 
-            number_of_copies = len(book.copies)
-            available_copies = 0
-            copy_info = []
-            for copy in book.copies:
-                if copy.is_checked_out:
-                    user_id = copy.user_id
-                    user = User.query.get(user_id)
-                    copy_info.append(
-                        f"Copy {copy.copy_id} is checked out by user {user.username}"
-                    )
-                else:
-                    available_copies += 1
-                    copy_info.append(f"Copy {copy.copy_id} is available")
+    if isbn:
+        book = Book.query.get(isbn)
 
-            results = [
-                {
-                    "total number of copies": number_of_copies,
-                    "available copies": available_copies,
-                    "copy info": copy_info,
-                }
-            ]
+        if not book:
+            return {"error": "No book with that isbn found"}
 
-            return {f"{book.title}": results}
+        number_of_copies = len(book.copies)
+        available_copies = 0
+        copy_info = []
+        for copy in book.copies:
+            if copy.is_checked_out:
+                user_id = copy.user_id
+                user = User.query.get(user_id)
+                copy_info.append(
+                    f"Copy {copy.copy_id} is checked out by user {user.username}"
+                )
+            else:
+                available_copies += 1
+                copy_info.append(f"Copy {copy.copy_id} is available")
 
-        else:
-            books = Book.query.order_by(
-                Book.title
-            ).all()  # Orders books alphabetically by title
+        results = [
+            {
+                "total number of copies": number_of_copies,
+                "available copies": available_copies,
+                "copy info": copy_info,
+            }
+        ]
 
-            results = [
-                {
-                    "isbn": book.isbn,
-                    "title": book.title,
-                    "authors": [author.name for author in book.authors],
-                    "number_of_copies": len(book.copies),
-                }
-                for book in books
-            ]
+        return {f"{book.title}": results}
 
-            return {"books": results}
     else:
-        return {"error": "request method not supported"}
+        books = Book.query.order_by(
+            Book.title
+        ).all()  # Orders books alphabetically by title
+
+        results = [
+            {
+                "isbn": book.isbn,
+                "title": book.title,
+                "authors": [author.name for author in book.authors],
+                "number_of_copies": len(book.copies),
+            }
+            for book in books
+        ]
+
+        return {"books": results}
 
 
 @book_controller.route("/newuser", methods=["POST"])
 def add_user():
 
-    if request.method == "POST":
+    if request.is_json:
+        data = request.get_json()
 
-        if request.is_json:
-            data = request.get_json()
+        username = data.get("username")
 
-            username = data.get("username")
+        if not username:
+            return {"error": "JSON must contain username field"}
 
-            if not username:
-                return {"error": "JSON must contain username field"}
+        if User.query.filter_by(username=username).first():
+            return {"error": "This username has already been taken"}
 
-            if User.query.filter_by(
-                username=username
-            ).first():  # Returns none if there is no user with that username
-                return {"error": "This username has already been taken"}
+        new_user = User(username=username)
+        db.session.add(new_user)
 
-            new_user = User(username=username)
-            db.session.add(new_user)
-
-            db.session.commit()
-            user_id = User.query.filter_by(username=username).first().user_id
-            return {"message": f"New user has been added - your user id is {user_id}"}
-
-        else:
-            return {"error": "The request payload is not in JSON format"}
+        db.session.commit()
+        user_id = User.query.filter_by(username=username).first().user_id
+        return {"message": f"New user has been added - your user id is {user_id}"}
 
     else:
-        return {"error": "request method not supported"}
+        return {"error": "The request payload is not in JSON format"}
 
 
 @book_controller.route("/user", methods=["GET"])
 def see_users_books():
-    if request.method == "GET":
-        user_id = request.args.get("user_id")
-        username = request.args.get("username")
-        user = None
 
-        if user_id:
-            user = User.query.get(user_id)
+    user_id = request.args.get("user_id")
+    username = request.args.get("username")
+    user = None
+
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return {"error": "No user with that user id found"}
+    else:
+        if username:
+            user = User.query.filter_by(username=username).first()
             if not user:
-                return {"error": "No user with that user id found"}
+                return {"error": "No user with that username found"}
         else:
-            if username:
-                user = User.query.filter_by(username=username).first()
-                if not user:
-                    return {"error": "No user with that username found"}
-            else:
-                return {
-                    "error": "Please enter query parameters for user_id or username"
-                }
+            return {"error": "Please enter query parameters for user_id or username"}
 
-        user_copies = user.checked_out_copies
-        if not user_copies:
-            return {
-                "message": f"User {user.username} has no books checked out currently"
-            }
-
-        else:
-            results = [
-                {
-                    "title": copy.book.title,
-                    "authors": [author.name for author in copy.book.authors],
-                }
-                for copy in user_copies
-            ]
-
-            return {"checked out copies": results}
+    user_copies = user.checked_out_copies
+    if not user_copies:
+        return {"message": f"User {user.username} has no books checked out currently"}
 
     else:
-        return {"error": "request method not supported"}
+        results = [
+            {
+                "title": copy.book.title,
+                "authors": [author.name for author in copy.book.authors],
+            }
+            for copy in user_copies
+        ]
+
+        return {"checked out copies": results}
 
 
 @book_controller.route("/addcopies", methods=["POST"])
 def add_copies():
 
-    if request.method == "POST":
+    if request.is_json:
 
-        if request.is_json:
+        data = request.get_json()
 
-            data = request.get_json()
+        isbn = data.get("isbn")
+        quantity_to_add = data.get("quantity")
 
-            # JSON should have book isbn and number of copies to add
-            isbn = data.get("isbn")
-            quantity_to_add = data.get("quantity")
+        if not all([isbn, quantity_to_add]):
+            return {"error": "Missing required fields"}
 
-            if not all([isbn, quantity_to_add]):
-                return {"error": "Missing required fields"}
+        # Check that there is already a book with this isbn
+        book = Book.query.get(isbn)
+        if not book:
+            return {"error": "Book with this ISBN not found"}
 
-            # Add new copies
-            for _ in range(quantity_to_add):
-                copy = Copy(isbn=isbn)
-                db.session.add(copy)
+        for _ in range(quantity_to_add):
+            copy = Copy(isbn=isbn)
+            db.session.add(copy)
 
-            db.session.commit()
+        db.session.commit()
 
-            return {"message": "Successfully added copies"}
-
-        else:
-            return {"error": "The request payload is not in JSON format"}
+        return {"message": "Successfully added copies"}
 
     else:
-        return {"error": "request method not supported"}
+        return {"error": "The request payload is not in JSON format"}
 
 
 @book_controller.route("/checkout", methods=["PUT"])
 def checkout_copy():
-    if request.method == "PUT":
 
-        if request.is_json:
+    if request.is_json:
 
-            data = request.get_json()
+        data = request.get_json()
 
-            # JSON should have (username or user id) AND copy id
-            user_id = data.get("user_id")
-            if not user_id:
-                username = data.get("username")
-                user = User.query.filter_by(username=username).first()
-                if user:
-                    user_id = user.user_id
+        user_id = data.get("user_id")
+        if not user_id:
+            username = data.get("username")
+            user = User.query.filter_by(username=username).first()
+            if user:
+                user_id = user.user_id
 
-            copy_id = data.get("copy_id")
-            if not all([user_id, copy_id]):
-                return {"error": "Missing required fields"}
+        copy_id = data.get("copy_id")
+        if not all([user_id, copy_id]):
+            return {"error": "Missing required fields"}
 
-            # Update copy table
-            copy = Copy.query.get(copy_id)
-            copy.user_id = user_id
-            copy.is_checked_out = True
+        # Update copy table
+        copy = Copy.query.get(copy_id)
+        if not copy:
+            return {"error": "No copy with that ID found"}
+        copy.user_id = user_id
+        copy.is_checked_out = True
 
-            db.session.commit()
+        db.session.commit()
 
-            return {
-                "message": f"Successfully checked out {copy.book.title} for user {copy.user.username}"
-            }
-        else:
-            return {"error": "The request payload is not in JSON format"}
-
+        return {
+            "message": f"Successfully checked out {copy.book.title} for user {copy.user.username}"
+        }
     else:
-        return {"error": "request method not supported"}
+        return {"error": "The request payload is not in JSON format"}
 
 
 @book_controller.route("/return", methods=["PUT"])
 def return_book():
-    if request.method == "PUT":
 
-        if request.is_json:
+    if request.is_json:
 
-            data = request.get_json()
+        data = request.get_json()
 
-            # JSON should have copy id
-            copy_id = data.get("copy_id")
-            if not copy_id:
-                return {"error", "Missing required fields"}
+        copy_id = data.get("copy_id")
+        if not copy_id:
+            return {"error": "Missing required fields"}
 
-            # Update copy table
+        # Update copy table
+        copy = Copy.query.get(copy_id)
+        if not copy:
+            return {"error": "No copy with that ID found"}
+        prev_user = copy.user.username
+        copy.user_id = None
+        copy.is_checked_out = False
 
-            copy = Copy.query.get(copy_id)
-            prev_user = copy.user.username
-            copy.user_id = None
-            copy.is_checked_out = False
+        db.session.commit()
 
-            db.session.commit()
-
-            return {
-                "message": f"Successfully returned {copy.book.title} for user {prev_user}"
-            }
-        else:
-            return {"error": "The request payload is not in JSON format"}
+        return {
+            "message": f"Successfully returned {copy.book.title} for user {prev_user}"
+        }
     else:
-        return {"error": "request method not supported"}
+        return {"error": "The request payload is not in JSON format"}
 
 
 @book_controller.route("/search", methods=["GET"])
 def search_books():
-    if request.method == "GET":
-        author_name = request.args.get("author")
-        title = request.args.get("title")
 
-        if not (author_name or title):
-            return {"error": "Please enter query parameters for author and/or title"}
+    author_name = request.args.get("author")
+    title = request.args.get("title")
 
-        # Build up query
-        query = Book.query
+    if not (author_name or title):
+        return {"error": "Please enter query parameters for author and/or title"}
 
-        if author_name:
-            author = Author.query.filter_by(name=author_name).first()
-            if not author:
-                return {"message": "No books matching your search have been found"}
-            query = query.filter(Book.authors.contains(author))
+    # Build up query
+    query = Book.query
 
-        if title:
-            query = query.filter_by(title=title)
-
-        books = query.all()
-
-        if not books:
+    if author_name:
+        author = Author.query.filter_by(name=author_name).first()
+        if not author:
             return {"message": "No books matching your search have been found"}
-        else:
-            results = [
-                {
-                    "isbn": book.isbn,
-                    "title": book.title,
-                    "authors": [author.name for author in book.authors],
-                    "number_of_copies": len(book.copies),
-                }
-                for book in books
-            ]
-            return {"books": results}
+        query = query.filter(Book.authors.contains(author))
 
+    if title:
+        query = query.filter_by(title=title)
+
+    books = query.all()
+
+    if not books:
+        return {"message": "No books matching your search have been found"}
     else:
-        return {"error": "request method not supported"}
+        results = [
+            {
+                "isbn": book.isbn,
+                "title": book.title,
+                "authors": [author.name for author in book.authors],
+                "number_of_copies": len(book.copies),
+            }
+            for book in books
+        ]
+        return {"books": results}

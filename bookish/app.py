@@ -22,11 +22,7 @@ def create_app():
     app.register_blueprint(book_controller)
 
     with app.app_context():
-        from bookish.models.author import Author
-        from bookish.models.book import Book
-        from bookish.models.copy import Copy
-        from bookish.models.junction_tables import BookAuthor
-        from bookish.models.user import User
+        from bookish.models import Author, Book, Copy, User, BookAuthor
 
         db.create_all()
 
