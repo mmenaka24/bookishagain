@@ -13,15 +13,15 @@ class Book(db.Model):
     authors = db.relationship("Author", secondary="book_author", back_populates="books")
 
     # one-to-many relationship with copies
-    copies = db.relationship("Copy", backref="Books", lazy=True)
+    copies = db.relationship("Copy", back_populates="book", lazy=True)
     # lazy = True means that the related copies will not be loaded from the database until they are explicitly needed
     # ie, the query to fetch them will be issued only when needed
 
     def __init__(self, isbn, title, authors):
-        self.isbn = isbn
-        self.title = title
         if not authors:
             raise ValueError("All books must have at least one author")
+        self.isbn = isbn
+        self.title = title
         self.authors = authors
 
     def __repr__(self):
@@ -32,5 +32,5 @@ class Book(db.Model):
             "isbn": self.isbn,
             "title": self.title,
             "authors": [author.name for author in self.authors],
-            "copies": [copy.id for copy in self.copies],
+            "copies": [copy.copy_id for copy in self.copies],
         }
