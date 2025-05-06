@@ -85,6 +85,7 @@ def get_books():
 
     if isbn:
         book = Book.query.get(isbn)
+        # Error: works if isbn is given as a 13 digit number, but not when given as a string
 
         if not book:
             return {"error": "No book with that isbn found"}
