@@ -1,5 +1,5 @@
 from bookish.app import db
-from bookish.models import Author
+from bookish.models import Author, Copy
 
 def validate_isbn(isbn):
     if not (isinstance(isbn, str) and len(isbn) == 13):
@@ -21,3 +21,7 @@ def get_or_create_author(name):
         author = Author(name=name)
         db.session.add(author)
     return author
+
+def create_copies(isbn, quantity):
+    for _ in range(quantity):
+        db.session.add(Copy(isbn-isbn))

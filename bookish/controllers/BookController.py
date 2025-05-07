@@ -1,7 +1,7 @@
 from bookish.app import db
 from bookish.models import Author, Book, Copy, User
 from flask import Blueprint, request
-from .utils import get_or_create_author, validate_isbn, validate_authors
+from .utils import create_copies, get_or_create_author, validate_isbn, validate_authors
 
 # Create a utils.py file for reusable validation functions
 
@@ -59,9 +59,7 @@ def add_book():
         # ie, don't want to add book yet because we need access to the copy ids
 
         # Add copies
-        for _ in range(quantity):
-            copy = Copy(isbn=isbn)
-            db.session.add(copy)
+        create_copies(isbn, quantity)
 
         db.session.commit()
         return {"message": f"New book {title} has been created successfully."}
@@ -211,9 +209,7 @@ def add_copies():
         if not book:
             return {"error": "Book with this ISBN not found"}
 
-        for _ in range(quantity_to_add):
-            copy = Copy(isbn=isbn)
-            db.session.add(copy)
+        create_copies(isbn, quantity_to_add)
 
         db.session.commit()
 
