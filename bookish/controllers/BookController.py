@@ -1,7 +1,13 @@
 from bookish.app import db
 from bookish.models import Author, Book, Copy, User
 from flask import Blueprint, request
-from .utils import create_copies, get_or_create_author, validate_isbn, validate_authors
+from .utils import (
+    create_copies,
+    find_user,
+    get_or_create_author,
+    validate_isbn,
+    validate_authors,
+)
 
 # Create a utils.py file for reusable validation functions
 
@@ -156,19 +162,11 @@ def see_users_books():
 
     user_id = request.args.get("user_id")
     username = request.args.get("username")
-    user = None
-
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return {"error": "No user with that user id found"}
-    else:
-        if username:
-            user = User.query.filter_by(username=username).first()
-            if not user:
-                return {"error": "No user with that username found"}
-        else:
-            return {"error": "Please enter query parameters for user_id or username"}
+    user = find_user(user_id, username)
+    if not user:
+        return {
+            "error": "User not found - make sure you have correctly entered username or user_id in query params"
+        }
 
     user_copies = user.checked_out_copies
     if not user_copies:
@@ -228,19 +226,14 @@ def checkout_copy():
 
         data = request.get_json()
 
-        user_id = data.get("user_id")
-        if not user_id:
-            username = data.get("username")
-            if username:
-                user = User.query.filter_by(username=username).first()
-                if user:
-                    user_id = user.user_id
-                else:
-                    return {"error": "No user with that username found"}
-        else:
-            user = User.query.get(user_id)
-            if not user:
-                return {"error": "No user with that ID found"}
+        search_user_id = data.get("user_id")
+        search_username = data.get("username")
+        user = find_user(search_user_id, search_username)
+        if not user:
+            return {
+                "error": "User not found - make sure you have correctly entered username or user_id field in request body"
+            }
+        user_id = user.user_id
 
         copy_id = data.get("copy_id")
         if not all([user_id, copy_id]):
@@ -311,7 +304,9 @@ def search_books():
     query = Book.query
 
     if author_name:
-        author = Author.query.filter_by(name=author_name).first()
+        author = Author.query.filter_by(
+            name=author_name
+        ).first()  # Use filter_by to search by something that isn't a primary key
         if not author:
             return {"message": "No books matching your search have been found"}
         query = query.filter(Book.authors.contains(author))
