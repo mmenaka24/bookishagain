@@ -2,6 +2,7 @@ from flask import request
 from bookish.models import Author, Book, Copy, User
 from bookish.app import db
 from flask import Blueprint
+from .utils import validate_isbn, validate_authors
 
 # Create a utils.py file for reusable validation functions
 
@@ -32,16 +33,13 @@ def add_book():
             return {"error": "Missing required fields"}
 
         # Check types of variables are correct
-        if not (type(isbn) is str and len(isbn) == 13):
+        if not validate_isbn(isbn):
             return {"error": "ISBN must be a string of length 13"}
-        if not type(title) is str:
+        if not isinstance(title, str):
             return {"error": "Book title must be a string"}
-        if not type(author_names) is list:
+        if not validate_authors(author_names):
             return {"error": "Author names must be given as a list of strings"}
-        for name in author_names:
-            if not type(name) is str:
-                return {"error": "Author names must be given as a list of strings"}
-        if not type(quantity) is int:
+        if not isinstance(quantity, str):
             return {"error": "Quantity must be given as an integer (not a string!)"}
 
         # Check if book with ISBN already exists in database
@@ -142,7 +140,7 @@ def add_user():
         if not username:
             return {"error": "JSON must contain username field"}
 
-        if not type(username) is str:
+        if not isinstance(username, str):
             return {"error": "Username must be a string"}
 
         if User.query.filter_by(username=username).first():
@@ -209,9 +207,9 @@ def add_copies():
         if not all([isbn, quantity_to_add]):
             return {"error": "Missing required fields"}
 
-        if not (type(isbn) is str and len(isbn) == 13):
+        if not validate_isbn(isbn):
             return {"error": "ISBN must be a string of length 13"}
-        if not type(quantity_to_add) is int:
+        if not isinstance(quantity_to_add, int):
             return {"error": "Quantity must be an integer"}
 
         # Check that there is already a book with this isbn
