@@ -33,16 +33,16 @@ def add_book():
 
         # Check types of variables are correct
         if not (type(isbn) is str and len(isbn) == 13):
-            return {"error": "The isbn must be a string of length 13"}
+            return {"error": "ISBN must be a string of length 13"}
         if not type(title) is str:
-            return {"error": "The book title must be a string"}
+            return {"error": "Book title must be a string"}
         if not type(author_names) is list:
-            return {"error": "The author names must be given as a list of strings"}
+            return {"error": "Author names must be given as a list of strings"}
         for name in author_names:
             if not type(name) is str:
-                return {"error": "The author names must be given as a list of strings"}
+                return {"error": "Author names must be given as a list of strings"}
         if not type(quantity) is int:
-            return {"error": "The quantity must be given as an integer (not a string!)"}
+            return {"error": "Quantity must be given as an integer (not a string!)"}
 
         # Check if book with ISBN already exists in database
         if Book.query.get(isbn):  # Use .get() to search by primary key
@@ -72,7 +72,7 @@ def add_book():
             db.session.add(copy)
 
         db.session.commit()
-        return {"message": "New book has been created successfully."}
+        return {"message": f"New book {title} has been created successfully."}
     else:
         return {"error": "The request payload is not in JSON format"}
 
@@ -81,14 +81,13 @@ def add_book():
 def get_books():
 
     # Want to give information about a specific book if the isbn is given, otherwise show all books
-    isbn = request.args.get("isbn")
+    isbn = request.args.get("isbn")  # request params are strings
 
     if isbn:
         book = Book.query.get(isbn)
-        # Error: works if isbn is given as a 13 digit number, but not when given as a string
 
         if not book:
-            return {"error": "No book with that isbn found"}
+            return {"error": "No book with that ISBN found"}
 
         number_of_copies = len(book.copies)
         available_copies = 0
@@ -143,6 +142,9 @@ def add_user():
         if not username:
             return {"error": "JSON must contain username field"}
 
+        if not type(username) is str:
+            return {"error": "Username must be a string"}
+
         if User.query.filter_by(username=username).first():
             return {"error": "This username has already been taken"}
 
@@ -151,7 +153,9 @@ def add_user():
 
         db.session.commit()
         user_id = User.query.filter_by(username=username).first().user_id
-        return {"message": f"New user has been added - your user id is {user_id}"}
+        return {
+            "message": f"New user {username} has been added - your user id is {user_id}"
+        }
 
     else:
         return {"error": "The request payload is not in JSON format"}
@@ -189,7 +193,7 @@ def see_users_books():
             for copy in user_copies
         ]
 
-        return {"checked out copies": results}
+        return {f"checked out copies for user {user.username}": results}
 
 
 @book_controller.route("/addcopies", methods=["POST"])
@@ -205,6 +209,11 @@ def add_copies():
         if not all([isbn, quantity_to_add]):
             return {"error": "Missing required fields"}
 
+        if not (type(isbn) is str and len(isbn) == 13):
+            return {"error": "ISBN must be a string of length 13"}
+        if not type(quantity_to_add) is int:
+            return {"error": "Quantity must be an integer"}
+
         # Check that there is already a book with this isbn
         book = Book.query.get(isbn)
         if not book:
@@ -216,7 +225,9 @@ def add_copies():
 
         db.session.commit()
 
-        return {"message": "Successfully added copies"}
+        return {
+            "message": f"Successfully added {quantity_to_add} copies of {book.title}"
+        }
 
     else:
         return {"error": "The request payload is not in JSON format"}
@@ -232,18 +243,28 @@ def checkout_copy():
         user_id = data.get("user_id")
         if not user_id:
             username = data.get("username")
-            user = User.query.filter_by(username=username).first()
-            if user:
-                user_id = user.user_id
+            if username:
+                user = User.query.filter_by(username=username).first()
+                if user:
+                    user_id = user.user_id
+                else:
+                    return {"error": "No user with that username found"}
+        else:
+            user = User.query.get(user_id)
+            if not user:
+                return {"error": "No user with that ID found"}
 
         copy_id = data.get("copy_id")
         if not all([user_id, copy_id]):
             return {"error": "Missing required fields"}
 
-        # Update copy table
         copy = Copy.query.get(copy_id)
         if not copy:
             return {"error": "No copy with that ID found"}
+        if copy.is_checked_out:
+            return {"error": "This copy is already checked out"}
+
+        # Update copy table
         copy.user_id = user_id
         copy.is_checked_out = True
 
@@ -271,7 +292,11 @@ def return_book():
         copy = Copy.query.get(copy_id)
         if not copy:
             return {"error": "No copy with that ID found"}
+        if not copy.is_checked_out:
+            return {"error": "This copy was already returned"}
         prev_user = copy.user.username
+
+        # Update copy table
         copy.user_id = None
         copy.is_checked_out = False
 
@@ -292,6 +317,7 @@ def search_books():
 
     if not (author_name or title):
         return {"error": "Please enter query parameters for author and/or title"}
+    # Don't need to check types here - if a query param is of the wrong type it will just return no books matching search
 
     # Build up query
     query = Book.query
