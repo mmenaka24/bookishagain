@@ -1,8 +1,7 @@
-from flask import request
-from bookish.models import Author, Book, Copy, User
 from bookish.app import db
-from flask import Blueprint
-from .utils import validate_isbn, validate_authors
+from bookish.models import Author, Book, Copy, User
+from flask import Blueprint, request
+from .utils import get_or_create_author, validate_isbn, validate_authors
 
 # Create a utils.py file for reusable validation functions
 
@@ -39,7 +38,7 @@ def add_book():
             return {"error": "Book title must be a string"}
         if not validate_authors(author_names):
             return {"error": "Author names must be given as a list of strings"}
-        if not isinstance(quantity, str):
+        if not isinstance(quantity, int):
             return {"error": "Quantity must be given as an integer (not a string!)"}
 
         # Check if book with ISBN already exists in database
@@ -50,12 +49,7 @@ def add_book():
         # Create a list of Author objects for this book (rather than just a list of their names as strings)
         author_objs = []
         for name in author_names:
-            author = Author.query.filter_by(
-                name=name
-            ).first()  # Use .filter_by to search by something that isn't a primary key
-            if not author:
-                author = Author(name=name)
-                db.session.add(author)
+            author = get_or_create_author(name)
             author_objs.append(author)
 
         # Create the Book object and add it to the database
